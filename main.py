@@ -7,7 +7,7 @@ import _Modulos.ecras as ecras
 import _Modulos.PGutilitarios as PGutilitarios
 
 import os
-import random
+import random as rand
 
 class Main(ecras.Jogo):
     def __init__(self) -> None:
@@ -54,7 +54,6 @@ class GamePlay(ecras.Ecra):
     def criar_sprites(self) -> None:
         super().criar_sprites()
         self.centro_mapa = pg.Vector2(self.largura//2, self.altura//2)
-        self.colisores = COLISORES
 
         self.mapas = pg.sprite.Group()
         self.tiros = pg.sprite.Group()
@@ -65,6 +64,16 @@ class GamePlay(ecras.Ecra):
         self.mapa = Mapa(self, MAPA, self.mapas)
         self.mapa_estruturas = Mapa(self, MAPA_ESTRUTURAS, self.mapas)
         self.mapa_difiente = Mapa(self, MAPA_DIFIENTE, self.difientes)
+        
+        # Colisores
+        self.colisores = []
+        for l, linha in enumerate(TILE_MAP):
+            for c, caractere in enumerate(linha):
+                if caractere == '1':
+                    rect = pg.Rect(self.mapa.rect.x + c*TAM_RECT_MAP, self.mapa.rect.y + l*TAM_RECT_MAP,
+                                   TAM_RECT_MAP, TAM_RECT_MAP)
+                    self.colisores.append(rect)
+        self.COLISORES = self.colisores
 
         self.player = Player(self, (0, 0))
         self.tanque = Tanque(self, (200, 200))
@@ -78,7 +87,71 @@ class GamePlay(ecras.Ecra):
                     self.jogo.mudar_ecra("menu")
 
     def atualizar(self) -> None:
-        self.todas_sprites.update()
+        # Atirar
+        if self.player.atirando:
+            self.tiros_atirar += TPF
+            if self.tiros_atirar >= 1:
+                self.tiros_atirar -= 1
+
+                if self.player.direcao == 'direita':
+                    pos = (self.player.rect.right -12, self.player.rect.centery +8)
+                else:
+                    pos = (self.player.rect.left +12, self.player.rect.centery +8)
+
+                Tiro(self, pos, pg.mouse.get_pos(), self.tiros, self.todas_sprites)
+
+        # Spawnar Monstros
+        if len(self.inimigos) < 10:
+            Tanque(self, TANQUE_SPRITESHEET, (80, 80, 18),
+                             {'parado': (0, 1), 'caminhando': (1, 6), 'atacando': (6, 14),
+                               'morrendo': (14, 18)},
+                               self.gerar_spawn_aleatorio(self.player.desl), TANQUE_VIDA)
+
+        # Mover
+        precionados = pg.key.get_pressed()
+        vel = (VEL_ATIRANDO if self.player.atirando else VEL_PLAYER)
+        vel_diagonal = int(vel*0.707 +0.5)
+
+        velx, vely = 0, 0
+        for direcao in DIRECOES.values():
+            if any([precionados[tecla] for tecla in direcao[0]]):
+                velx += direcao[2] if direcao[1] == 0 else 0
+                vely += direcao[2] if direcao[1] == 1 else 0
+
+        velx *= (vel_diagonal if abs(velx)+abs(vely) == 2 else vel)
+        vely *= (vel_diagonal if abs(velx)+abs(vely) == 2 else vel)
+
+        # Detectar colisões
+        player_rect = pg.Rect(0, 0, self.player.rect.width//2, self.player.rect.height//4)
+        player_rect.bottomleft = (self.player.rect.left +20, self.player.rect.bottom -20)
+        if self.player.estado != 'morrendo':
+            player_rect.x += velx
+            player_rect.y += vely
+
+        if not any([player_rect.colliderect(rect) for rect in self.colisores]):
+            limx = (1875 - self.largura)//2
+            limy = (1875 - self.altura)//2
+            
+            if self.mapa_centro[0] -937 -velx <= 0 and \
+             self.mapa_centro[0] +937 -velx >= self.largura and \
+             -limx <= self.player.desl[0] <= limx:
+                self.mapa_centro[0] -= velx
+                for rect in self.colisores: rect.x -= velx
+                
+            if self.mapa_centro[1] -937 -vely <= 0 and \
+             self.mapa_centro[1] +937 -vely >= self.altura and \
+             -limy <= self.player.desl[1] <= limy:
+                self.mapa_centro[1] -= vely
+                for rect in self.colisores: rect.y -= vely
+
+            if -900 <= self.player.desl[0] + velx <= 900: self.player.desl[0] += velx
+            if -900 <= self.player.desl[1] + vely <= 900: self.player.desl[1] += vely
+            
+            self.mapa.rect.center = self.mapa_centro
+            self.mapa_estruturas.rect.center = self.mapa_centro
+            self.mapa_difiente.rect.center = self.mapa_centro
+
+        super().atualizar()
 
     def desenhar(self) -> None:
         self.tela.fill(PRETO)
@@ -88,6 +161,13 @@ class GamePlay(ecras.Ecra):
             pg.draw.rect(self.tela, VERMELHO, colisor)
         self.personagens.draw(self.tela)
         self.difientes.draw(self.tela)
+        
+    def gerar_spawn_aleatorio(self, player_desl: list) -> None:
+        spawnX = rand.choice([n for n in range(-937, 937) 
+                                    if not player_desl[0]-300 <= n <= player_desl[0]+300])
+        spawnY = rand.choice([n for n in range(-937, 937) 
+                                    if not player_desl[1]-300 <= n <= player_desl[1]+300])
+        return (spawnX, spawnY)
 
 class GameOver(ecras.Ecra):
     def criar_sprites(self):

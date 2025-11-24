@@ -13,8 +13,7 @@ class Mapa(pg.sprite.Sprite):
         self.rect.center = ecra.centro_mapa
 
     def update(self) -> None:
-        self.desl = -self.ecra.player.desl
-        self.rect.center = self.ecra.centro_mapa + self.desl
+        self.rect.center = self.ecra.centro_mapa
 
 class Personagem(pg.sprite.Sprite):
     def __init__(self, ecra, desl: tuple, vida: int, arq_spritesheet: str,
@@ -65,6 +64,22 @@ class Personagem(pg.sprite.Sprite):
                 imagens_organizadas[estado].append(imgs_estado)
                 indice += 1
         return imagens_organizadas
+    
+    def atualizar_pos(self) -> None:
+        self.rect.center = self.ecra.centro_mapa + self.desl
+        
+    def morrer(self):
+        if self.vida <= 0:
+            self.estado = 'morrendo'
+        
+    def movimentar(self) -> None:
+        pass
+
+    def direcionar(self) -> None:
+        pass
+
+    def atualizar_img(self) -> None:
+        pass
 
 class Player(Personagem):
     def __init__(self, ecra, pos: tuple) -> None:
@@ -97,17 +112,21 @@ class Player(Personagem):
                 direcao = direcao.normalize()
 
             # verificar colisão
+            '''
             vel = PLAYER_VEL_ATIRANDO if self.atirando else PLAYER_VEL
-            rect_colisor = self.rect.copy()
+            rect_colisor = pg.Rect(0, 0, self.rect.width//2, self.rect.height//4)
+            rect_colisor.bottomleft = (self.rect.left +20, self.rect.bottom -20)
             rect_colisor.x += direcao.x * vel
             rect_colisor.y += direcao.y * vel
             if not any([True for colisor in self.ecra.colisores
                         if colisor.colliderect(rect_colisor)]):
                 self.desl += direcao * vel
-                for colisor in self.ecra.colisores:
-                    colisor.center += -direcao * vel
+                self.ecra.centro_mapa = pg.Vector2(self.ecra.largura//2, self.ecra.altura//2) -self.desl
+                for i, colisor in enumerate(self.ecra.colisores):
+                    colisor.center = (self.ecra.centro_mapa - pg.Vector2(937, 937)) + pg.Vector2(self.ecra.COLISORES[1].topleft)'''
 
             # ATIRAR
+            '''
             if press_mouse[0]:
                 self.atirando = True
                 if self.contador_tpf >= 1:
@@ -118,11 +137,14 @@ class Player(Personagem):
                     self.contador_tpf += TPF
             else:
                 self.atirando = False
-                self.contador_tpf = 0
+                self.contador_tpf = 0'''
 
             # ATUALIZAR IMAGEM
+            self.morrer()
             # estado
             self.estado_atual = self.estado
+            if self.estado == "morrendo":
+                pass
             if self.atirando:
                 if direcao.length() != 0:
                     self.estado = "atirando_correndo"
@@ -133,15 +155,21 @@ class Player(Personagem):
                     self.estado = "correndo"
                 else:
                     self.estado = "parado"
+                    
             # lado
             if self.atirando:
                 self.lado = 0 if pos_mouse[0] < self.rect.centerx else 1
             else:
                 self.lado = 0 if direcao.x < 0 else 1 if direcao.x > 0 else self.lado
+                
             # imagem
             self.atual += 0.5
             if self.atual >= len(self.imagens[self.estado]) or self.estado != self.estado_atual:
                 self.atual = 0
+                
+                # Morrer
+                if self.estado == 'morrendo':
+                    self.morto = True
 
             self.image = self.imagens[self.estado][int(self.atual)][self.lado]
 
@@ -156,20 +184,48 @@ class Tanque(Personagem):
         super().__init__(ecra, pos, TANQUE_VIDA, TANQUE_SPRITESHEET,
                          (80, 80), 18, estados, [ecra.inimigos])
         
+        self.dano = TANQUE_DANO
+        
     def update(self):
         if self.vivo:
+            player = self.ecra.player
+            dist_player = pg.Vector2(self.rect.center).distance_to(pg.Vector2(player.rect.center))
+            
             # MOVER PERSONAGEM
+            direcao = pg.Vector2(player.rect.center) - pg.Vector2(self.rect.center)
+
+            if direcao.length() != 0:
+                direcao = direcao.normalize()
+                
+            self.desl += direcao * TANQUE_VEL
+            self.atualizar_pos()
 
             # ATUALIZAR IMAGEM
+            self.morrer()
             # estado
             estado_atual = self.estado
-            
+            if self.estado == "morrendo":
+                pass
+            elif dist_player > TANQUE_ALCANCE:
+                self.estado = "andando"
+            else:
+                self.estado = "atacando"
+                    
             # lado
+            self.lado = 1 if self.rect.centerx < player.rect.centerx else 0
 
             # imagem
             self.atual += 0.3
             if self.atual >= len(self.imagens[self.estado]) or self.estado != estado_atual:
                 self.atual = 0
+                
+                # Dar dano ao atacar
+                if self.estado == 'atacando':
+                    player.vida -= self.dano
+
+                # Morrer
+                if self.estado == 'morrendo':
+                    self.morto = True
 
             self.image = self.imagens[self.estado][int(self.atual)][self.lado]
 

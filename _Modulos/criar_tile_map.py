@@ -5,14 +5,14 @@ pg.init()
 tela = pg.display.set_mode((1, 1))
 
 TAM_RECT = 5
-caminho_img = os.path.join("C:/Users/ISOLDE/Documents/GitHub/Zombie Machine V/Sprites/Mapas",
-                           "colisores.png")
+dir_local = os.path.dirname(__file__)
+caminho_img = os.path.join(dir_local, "Sprites", "Mapas", "colisores.png")
 img_map = pg.image.load(caminho_img).convert_alpha()
 rect_map = img_map.get_rect()
 mask_map = pg.mask.from_surface(img_map)
 LARGURA, ALTURA = img_map.get_size()
 
-tile_map = os.path.join("C:/Users/ISOLDE/Documents/GitHub/Zombie Machine V/Sprites/Mapas", "tile_map.txt")
+tile_map = os.path.join(dir_local, "Sprites", "Mapas", f"tile_map{rect_map.width//TAM_RECT}x{rect_map.height//TAM_RECT}.txt")
 with open(tile_map, "w") as f:
     for y in range(0, ALTURA, TAM_RECT):
         linha = ""

@@ -47,17 +47,14 @@ BOTAO_OPTIONS = os.path.join(DIR_INTERFACE, "Botão_options.png")
 BOTAO_CREDITS = os.path.join(DIR_INTERFACE, "Botão_credits.png")
 CREDITS = os.path.join(DIR_INTERFACE, "Créditos.jpg")
 
-# tile map
-TAM_COLISOR = 5
-tile_map_caminho = os.path.join(DIR_MAPAS, "tile_map.txt")
-with open(tile_map_caminho, "r") as f:
-    TILE_MAP = [list(linha.strip()) for linha in f.readlines()]
-    COLISORES = []
-    for y, linha in enumerate(TILE_MAP):
-        for x, valor in enumerate(linha):
-            if valor == "1":
-                COLISORES.append(pg.Rect(x * TAM_COLISOR, y * TAM_COLISOR, TAM_COLISOR, TAM_COLISOR))
-
+# Tile Map
+TAM_RECT_MAP = 5
+TILE_MAP_TXT = os.path.join(DIR_MAPAS, f'tile_map{1875//TAM_RECT_MAP}x{1875//TAM_RECT_MAP}.txt')
+TILE_MAP = []
+with open(TILE_MAP_TXT, 'r', encoding="utf-8") as txt:
+    quebra = txt.readlines()
+    TILE_MAP = [linha.strip() for linha in quebra]
+    
 # Sons
 # ...
 
@@ -69,5 +66,8 @@ TPF = 0.3  # tiros por frame
 TIRO_VEL = 20
 TIRO_DANO = 10
 
-TANQUE_VEL = 5
+# tanque
+TANQUE_VEL = 3
 TANQUE_VIDA = 50
+TANQUE_DANO = 10
+TANQUE_ALCANCE = 40
