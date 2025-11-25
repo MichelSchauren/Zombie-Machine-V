@@ -5,6 +5,8 @@ import os
 LARGURA, ALTURA = 1080, 620
 TITULO = "Zombie Kill Machine V"
 FPS = 30
+FONTE = "consolas"
+RELOGIO = pg.time.Clock()
 
 # Cores
 PRETO = (0, 0, 0)
@@ -45,6 +47,7 @@ FUNDO_GAMEOVER = os.path.join(DIR_INTERFACE, "Fundo_gameover.png")
 BOTAO_START = os.path.join(DIR_INTERFACE, "Botão_start.png")
 BOTAO_OPTIONS = os.path.join(DIR_INTERFACE, "Botão_options.png")
 BOTAO_CREDITS = os.path.join(DIR_INTERFACE, "Botão_credits.png")
+BOTAO_MENU = os.path.join(DIR_INTERFACE, "Botão_menu.png")
 CREDITS = os.path.join(DIR_INTERFACE, "Créditos.jpg")
 
 # Tile Map

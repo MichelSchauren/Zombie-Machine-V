@@ -15,7 +15,7 @@ class Mapa(pg.sprite.Sprite):
 class Personagem(pg.sprite.Sprite):
     def __init__(self, ecra, spritesheet: str, div_spr: tuple, org_spr: dict,
                   pos: tuple, vida: int, *groups) -> None:
-        super().__init__(groups)
+        super().__init__(groups, ecra.personagens, ecra.todas_sprites)
         self.ecra = ecra
 
         self.spritesheet = pg.image.load(spritesheet).convert_alpha()
@@ -84,7 +84,7 @@ class Personagem(pg.sprite.Sprite):
 class Player(Personagem):
     def __init__(self, ecra, spritesheet: str, div_spr: tuple, org_spr: dict,
                   pos: tuple, vida: int) -> None:
-        super().__init__(ecra, spritesheet, div_spr, org_spr, pos, vida, ecra.todas_sprites)
+        super().__init__(ecra, spritesheet, div_spr, org_spr, pos, vida)
         
     def update(self) -> None:
         self.atualizar_pos()
@@ -115,7 +115,7 @@ class Player(Personagem):
 
             # Controle de direção
             if self.atirando:
-                if pos_mouse[0] < self.ecra.largura//2:
+                if pos_mouse[0] < self.rect.center:
                     self.direcao = 'esquerda'
                 else:
                     self.direcao = 'direita'
@@ -131,30 +131,32 @@ class Player(Personagem):
             if self.estado == 'morrendo':
                 self.atual += 0.2
             elif self.atirando:
-                self.atual += VEL_ATIRANDO/8
+                self.atual += PLAYER_VEL_ATIRANDO/8
             else:
-                self.atual += VEL_PLAYER/8
+                self.atual += PLAYER_VEL/8
             if int(self.atual) > len(self.imagens[self.direcao][self.estado])-1:
                 self.atual = 0
 
                 # Morrer
                 if self.estado == 'morrendo':
                     self.morto = True
-                    self.ecra.gameover.rodar()
+                    
+        else:
+            self.atual += 1
+            if self.atual >= 30:
+                self.ecra.jogo.mudar_tela("gameover")
 
 class Rapido(Personagem):
     def __init__(self, ecra, spritesheet: str, div_spr: tuple, org_spr: dict,
      pos: tuple, vida: int) -> None:
-        super().__init__(ecra, spritesheet, div_spr, org_spr, pos, vida,
-         ecra.todas_sprites, ecra.inimigos)
+        super().__init__(ecra, spritesheet, div_spr, org_spr, pos, vida, ecra.inimigos)
 
 class Tanque(Personagem):
     def __init__(self, ecra, spritesheet: str, div_spr: tuple, org_spr: dict,
      pos: tuple, vida: int) -> None:
-        super().__init__(ecra, spritesheet, div_spr, org_spr, pos, vida,
-         ecra.todas_sprites, ecra.inimigos)
+        super().__init__(ecra, spritesheet, div_spr, org_spr, pos, vida,  ecra.inimigos)
 
-        self.dano = DANO_TANQUE
+        self.dano = TANQUE_DANO
 
     def update(self):
         self.atualizar_pos()
@@ -162,17 +164,22 @@ class Tanque(Personagem):
             super().update()
 
             player = self.ecra.player
-            dist_player = calc_dist(self.rect.center, player.rect.center)
+            dist_player = pg.Vector2(self.rect.center).distance_to(pg.Vector2(player.rect.center))
 
             # Definir estado e mover
+            # Não mover quando estiver morto
             if self.estado == 'morrendo':
                 pass
+            # Mover quando estiver a mais de 40 pixels de distancia do player
             elif dist_player > 40:
-                velx, vely = calc_movimento(self.rect.center, player.rect.center, VEL_TANQUE)
-                self.desl[0] += velx
-                self.desl[1] += vely
+                direcao = pg.Vector2(player.rect.center) - pg.Vector2(self.rect.center)
+                if direcao.length() != 0:
+                    direcao = direcao.normalize()
+                self.desl += direcao * TANQUE_VEL
+                
                 if self.estado != 'caminhando':
                     self.estado, self.atual = 'caminhando', 0
+            # atacar quando estiver próximo ao player
             elif self.estado != 'atacando':
                 self.estado, self.atual = 'atacando', 0
 
@@ -181,7 +188,7 @@ class Tanque(Personagem):
 
             # Atualizar imagem
             self.image = self.imagens[dir][self.estado][int(self.atual)]
-            self.atual += VEL_TANQUE/8
+            self.atual += TANQUE_VEL/8
             if int(self.atual) > len(self.imagens[dir][self.estado])-1:
                 self.atual = 0
 
@@ -209,7 +216,7 @@ class Tiro(pg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = origem
 
-        self.velx, self.vely = calc_movimento(self.origem, self.destino, VEL_TIRO)
+        self.velx, self.vely = calc_movimento(self.origem, self.destino, TIRO_VEL)
         self.distancia = calc_dist(self.origem, self.destino)
 
     def update(self):
@@ -229,46 +236,34 @@ class Tiro(pg.sprite.Sprite):
                 break
 
 class Botao(pg.sprite.Sprite):
-    def __init__(self, pos=tuple, botao=str, reverso=False):
-        super().__init__()
+    def __init__(self, pos=tuple, arquivo=str, tam: tuple=(216, 144), func=lambda: None, *groups):
+        super().__init__(groups)
 
-        spritesheet = pg.image.load(SPRITESHEET_BOTOES).convert_alpha()
-        self.parados = spritesheet.subsurface((14, 15), (313, 150))
-        self.precionados = spritesheet.subsurface((14, 189), (313, 150))
-
-        self.cordenadas = {
-            'settings': ((0, 0), (97, 44)),
-            'pessoa': ((163, 0), (44, 44)),
-            'bandeira': ((110, 0), (44, 44)),
-            'pause': ((216, 0), (97, 44)),
-            'play': ((0, 52), (71, 44)),
-            'menu': ((79, 52), (76, 44)),
-            'seta': ((163, 52), (44, 44)),
-            'certo': ((216, 52), (44, 44)),
-            'errado': ((269, 52), (44, 44)),
-            'exit': ((79, 104), (76, 45)),
-            'som': ((216, 104), (44, 44)),
-        }
-
-        self.precionado = False
-        self.botao_parado = self.parados.subsurface(self.cordenadas[botao][0], self.cordenadas[botao][1])
-        self.botao_precionado = self.precionados.subsurface(self.cordenadas[botao][0], self.cordenadas[botao][1])
-
-        if reverso:
-            self.botao_parado = pg.transform.flip(self.botao_parado, True, False)
-            self.botao_precionado = pg.transform.flip(self.botao_precionado, True, False)
+        self.selecionado = False
+        self.botao_parado = pg.image.load(arquivo).convert_alpha()
+        self.botao_parado = pg.transform.scale(self.botao_parado, tam)
+        self.botao_selecionado = pg.transform.scale(self.botao_parado, (int(self.botao_parado.get_width()*1.1),
+                                                                      int(self.botao_parado.get_height()*1.1)))
 
         self.image = self.botao_parado
         self.rect = self.image.get_rect()
         self.rect.topleft = pos
 
-    def funcionar(self):
-        pass
+        self.funcionar = func
 
-    def pressionar(self):
-        self.precionado = True
-        self.image = self.botao_precionado
+    def eventos(self, event):
+        pos_mouse = pg.mouse.get_pos()
 
-    def despressionar(self):
-        self.precionado = False
-        self.image = self.botao_parado
+        if event.type == MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(pg.mouse.get_pos()):
+                self.funcionar()
+
+        if event.type == MOUSEMOTION:
+            if self.rect.collidepoint(pos_mouse):
+                if not self.selecionado:
+                    self.selecionado = True
+                    self.image = self.botao_selecionado
+            elif self.selecionado:
+                self.selecionado = False
+                self.image = self.botao_parado
+        

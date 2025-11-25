@@ -53,7 +53,7 @@ class Menu(ecras.Ecra):
 class GamePlay(ecras.Ecra):
     def criar_sprites(self) -> None:
         super().criar_sprites()
-        self.centro_mapa = pg.Vector2(self.largura//2, self.altura//2)
+        self.mapa_centro = pg.Vector2(self.largura//2, self.altura//2)
 
         self.mapas = pg.sprite.Group()
         self.tiros = pg.sprite.Group()
@@ -102,14 +102,11 @@ class GamePlay(ecras.Ecra):
 
         # Spawnar Monstros
         if len(self.inimigos) < 10:
-            Tanque(self, TANQUE_SPRITESHEET, (80, 80, 18),
-                             {'parado': (0, 1), 'caminhando': (1, 6), 'atacando': (6, 14),
-                               'morrendo': (14, 18)},
-                               self.gerar_spawn_aleatorio(self.player.desl), TANQUE_VIDA)
+            Tanque(self, self.gerar_spawn_aleatorio(self.player.desl))
 
         # Mover
         precionados = pg.key.get_pressed()
-        vel = (VEL_ATIRANDO if self.player.atirando else VEL_PLAYER)
+        vel = (PLAYER_VEL_ATIRANDO if self.player.atirando else PLAYER_VEL)
         vel_diagonal = int(vel*0.707 +0.5)
 
         velx, vely = 0, 0

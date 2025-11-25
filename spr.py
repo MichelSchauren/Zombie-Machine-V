@@ -10,10 +10,10 @@ class Mapa(pg.sprite.Sprite):
         self.image = pg.image.load(arq).convert_alpha()
         self.rect = self.image.get_rect()
         self.desl = pg.Vector2(0, 0)
-        self.rect.center = ecra.centro_mapa
+        self.rect.center = ecra.mapa_centro
 
     def update(self) -> None:
-        self.rect.center = self.ecra.centro_mapa
+        self.rect.center = self.ecra.mapa_centro
 
 class Personagem(pg.sprite.Sprite):
     def __init__(self, ecra, desl: tuple, vida: int, arq_spritesheet: str,
@@ -29,7 +29,7 @@ class Personagem(pg.sprite.Sprite):
         self.image = self.imagens["parado"][0][1]
         self.rect = self.image.get_rect()
         self.desl = pg.Vector2(desl)
-        self.rect.center = ecra.centro_mapa + self.desl
+        self.rect.center = ecra.mapa_centro + self.desl
 
         self.vivo = True
         self.vida = vida
@@ -66,7 +66,7 @@ class Personagem(pg.sprite.Sprite):
         return imagens_organizadas
     
     def atualizar_pos(self) -> None:
-        self.rect.center = self.ecra.centro_mapa + self.desl
+        self.rect.center = self.ecra.mapa_centro + self.desl
         
     def morrer(self):
         if self.vida <= 0:
@@ -121,9 +121,9 @@ class Player(Personagem):
             if not any([True for colisor in self.ecra.colisores
                         if colisor.colliderect(rect_colisor)]):
                 self.desl += direcao * vel
-                self.ecra.centro_mapa = pg.Vector2(self.ecra.largura//2, self.ecra.altura//2) -self.desl
+                self.ecra.mapa_centro = pg.Vector2(self.ecra.largura//2, self.ecra.altura//2) -self.desl
                 for i, colisor in enumerate(self.ecra.colisores):
-                    colisor.center = (self.ecra.centro_mapa - pg.Vector2(937, 937)) + pg.Vector2(self.ecra.COLISORES[1].topleft)'''
+                    colisor.center = (self.ecra.mapa_centro - pg.Vector2(937, 937)) + pg.Vector2(self.ecra.COLISORES[1].topleft)'''
 
             # ATIRAR
             '''
@@ -185,7 +185,7 @@ class Tanque(Personagem):
                          (80, 80), 18, estados, [ecra.inimigos])
         
         self.dano = TANQUE_DANO
-        
+
     def update(self):
         if self.vivo:
             player = self.ecra.player
