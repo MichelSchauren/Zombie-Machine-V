@@ -3,80 +3,68 @@ from pygame.locals import *
 
 from constantes import *
 from spr import *
-from _Modulos import ecras
-from _Modulos import PGutilitarios
+import _Modulos.ecras as ecras
+import _Modulos.PGutilitarios as PGutilitarios
 
+import os
 import random as rand
 
-class Zombies(ecras.Jogo):
-    def __init__(self):
-        super().__init__(TITULO, LARGURA, ALTURA, 1, FPS, FONTE)
-
-        self.telas = {
+class Main(ecras.Jogo):
+    def __init__(self) -> None:
+        super().__init__(TITULO, LARGURA, ALTURA, 1, FPS)
+        
+        self.ecras = {
             "menu": Menu(self),
             "gameplay": GamePlay(self),
-            "gameover": GameOver(self)
+            "gameover": GameOver(self),
+            "options": Options(self),
+            "credits": Credits(self)
         }
-        self.tela_atual = self.telas["menu"]
+        self.ecra_atual = self.ecras["menu"]
 
 class Menu(ecras.Ecra):
-    def __init__(self, jogo, *flags):
-        super().__init__(jogo, *flags)
-
-    def criar_sprites(self):
+    def criar_sprites(self) -> None:
         super().criar_sprites()
         self.botoes = pg.sprite.Group()
 
-        self.start = PGutilitarios.Botao((self.largura//2 -10, self.altura//2 -380), BOTAO_START, (540, 360), lambda : self.jogo.mudar_tela("gameplay"),
-                           self.botoes, self.todas_sprites)
-        self.options = PGutilitarios.Botao((self.largura//2 +80, self.altura//2 +15), BOTAO_OPTIONS, (216, 144), lambda : print("Opções"),
-                             self.botoes, self.todas_sprites)
-        self.credits = PGutilitarios.Botao((self.largura//2 +80, self.altura//2 +135), BOTAO_CREDITS, (216, 144), lambda : print("Créditos"),
-                             self.botoes, self.todas_sprites)
+        grupos = [self.todas_sprites, self.botoes]
+        self.botao_start = PGutilitarios.Botao(lambda: self.jogo.mudar_ecra("gameplay"),
+        (self.largura//2, self.altura//2 - 340), BOTAO_START,
+        aumt_select=True, escala=0.4, groups=grupos) # START
+        self.botao_options = PGutilitarios.Botao(lambda: self.jogo.mudar_ecra("options"),
+        (self.largura//2 +60, self.altura//2 + 20), BOTAO_OPTIONS,
+        aumt_select=True, escala=0.2, groups=grupos) # OPTIONS
+        self.botao_credits = PGutilitarios.Botao(lambda: self.jogo.mudar_ecra("credits"),
+        (self.largura//2 +60, self.altura//2 + 146), BOTAO_CREDITS,
+        aumt_select=True, escala=0.2, groups=grupos) # CREDITS
 
-    def eventos(self):
+    def eventos(self) -> None:
         for event in self.jogo.eventos:
             self.eventos_padrao(event)
-
-            if event.type == KEYDOWN:
-                if event.key in (K_KP_ENTER, K_RETURN):
-                    self.start.funcionar()
 
             for botao in self.botoes:
                 botao.eventos(event)
 
-    def desenhar(self):
-        self.tela.fill(self.jogo.fundo)
-        self.mostrar_imagem(FUNDO_MENU, self.largura//2, self.altura//2)
+    def desenhar(self) -> None:
+        PGutilitarios.mostrar_imagem(self.tela, FUNDO_MENU, self.largura//2, self.altura//2,
+                                     escala=self.jogo.escala)
         self.todas_sprites.draw(self.tela)
-    
+
 class GamePlay(ecras.Ecra):
-    def __init__(self, jogo, *flags) -> None:
-        self.mapa_centro = [jogo.largura//2, jogo.altura//2]
-        self.tiros_atirar = 0
-
-        super().__init__(jogo, *flags)
-
-        self.gameover = GameOver(self)
-
     def criar_sprites(self) -> None:
-        self.todas_sprites = pg.sprite.Group()
+        super().criar_sprites()
+        self.mapa_centro = pg.Vector2(self.largura//2, self.altura//2)
+
         self.mapas = pg.sprite.Group()
         self.tiros = pg.sprite.Group()
         self.personagens = pg.sprite.Group()
         self.inimigos = pg.sprite.Group()
         self.difientes = pg.sprite.Group()
+
+        self.mapa = Mapa(self, MAPA, self.mapas)
+        self.mapa_estruturas = Mapa(self, MAPA_ESTRUTURAS, self.mapas)
+        self.mapa_difiente = Mapa(self, MAPA_DIFIENTE, self.difientes)
         
-        self.mapa = Mapa(self.mapa_centro, MAPA, self.todas_sprites, self.mapas)
-        self.mapa_estruturas = Mapa(self.mapa_centro, MAPA_ESTRUTURAS, self.todas_sprites, self.mapas)
-
-        self.player = Player(self, PLAYER_SPRITESHEET, (80, 80, 26),
-                             {'correndo': (0, 11), 'caminhando': (11, 19), 'morrendo': (19,24),
-                              'atacando': (24, 25), 'parado': (25, 26)},
-                                (0, 0), PLAYER_VIDA)
-
-        self.mapa_difiente = Mapa(self.mapa_centro, MAPA_DIFIENTE, self.todas_sprites, self.difientes)
-
         # Colisores
         self.colisores = []
         for l, linha in enumerate(TILE_MAP):
@@ -85,10 +73,18 @@ class GamePlay(ecras.Ecra):
                     rect = pg.Rect(self.mapa.rect.x + c*TAM_RECT_MAP, self.mapa.rect.y + l*TAM_RECT_MAP,
                                    TAM_RECT_MAP, TAM_RECT_MAP)
                     self.colisores.append(rect)
+        self.COLISORES = self.colisores
 
-    def eventos(self) -> None:
+        self.player = Player(self, (0, 0))
+        self.tanque = Tanque(self, (200, 200))
+
+    def eventos(self):
         for event in self.jogo.eventos:
             self.eventos_padrao(event)
+
+            if event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    self.jogo.mudar_ecra("menu")
 
     def atualizar(self) -> None:
         # Atirar
@@ -106,10 +102,7 @@ class GamePlay(ecras.Ecra):
 
         # Spawnar Monstros
         if len(self.inimigos) < 10:
-            Tanque(self, TANQUE_SPRITESHEET, (80, 80, 18),
-                             {'parado': (0, 1), 'caminhando': (1, 6), 'atacando': (6, 14),
-                               'morrendo': (14, 18)},
-                               self.gerar_spawn_aleatorio(self.player.desl), TANQUE_VIDA)
+            Tanque(self, self.gerar_spawn_aleatorio(self.player.desl))
 
         # Mover
         precionados = pg.key.get_pressed()
@@ -148,9 +141,8 @@ class GamePlay(ecras.Ecra):
                 self.mapa_centro[1] -= vely
                 for rect in self.colisores: rect.y -= vely
 
-            if self.player.estado != 'morrendo':
-                if -900 <= self.player.desl[0] + velx <= 900: self.player.desl[0] += velx
-                if -900 <= self.player.desl[1] + vely <= 900: self.player.desl[1] += vely
+            if -900 <= self.player.desl[0] + velx <= 900: self.player.desl[0] += velx
+            if -900 <= self.player.desl[1] + vely <= 900: self.player.desl[1] += vely
             
             self.mapa.rect.center = self.mapa_centro
             self.mapa_estruturas.rect.center = self.mapa_centro
@@ -159,22 +151,14 @@ class GamePlay(ecras.Ecra):
         super().atualizar()
 
     def desenhar(self) -> None:
+        self.tela.fill(PRETO)
         self.mapas.draw(self.tela)
         self.tiros.draw(self.tela)
+        for colisor in self.colisores:
+            pg.draw.rect(self.tela, VERMELHO, colisor)
         self.personagens.draw(self.tela)
         self.difientes.draw(self.tela)
-
-        # Barra de vida do player
-        pg.draw.rect(self.tela, VERMELHO, pg.Rect(15, 15, PLAYER_VIDA*(self.largura//300), 50))
-        pg.draw.rect(self.tela, VERDE, pg.Rect(15, 15, self.player.vida*(self.largura//300), 50))
-
-        # Barra de vida dos inimigos
-        for inimigo in self.inimigos:
-            pg.draw.rect(self.tela, VERMELHO, pg.Rect(inimigo.rect.x, inimigo.rect.y -10,
-                                                      inimigo.rect.width, 5))
-            pg.draw.rect(self.tela, VERDE, pg.Rect(inimigo.rect.x, inimigo.rect.y -10,
-                                                   inimigo.rect.width*(inimigo.vida/TANQUE_VIDA), 5))
-
+        
     def gerar_spawn_aleatorio(self, player_desl: list) -> None:
         spawnX = rand.choice([n for n in range(-937, 937) 
                                     if not player_desl[0]-300 <= n <= player_desl[0]+300])
@@ -187,40 +171,65 @@ class GameOver(ecras.Ecra):
         super().criar_sprites()
         self.botoes = pg.sprite.Group()
 
-        self.menu = PGutilitarios.Botao((self.largura//2 -180, self.altura//2 +50), BOTAO_MENU, (360, 280), lambda : self.jogo.mudar_tela("menu"),
-                          self.botoes, self.todas_sprites)
+        self.menu = PGutilitarios.Botao(lambda: self.jogo.mudar_ecra("menu"),
+        (self.largura//2, self.altura//2 + 100), BOTAO_START, escala=0.3,
+        groups=[self.todas_sprites, self.botoes]) # MENU
 
     def eventos(self):
         for event in self.jogo.eventos:
-            self.eventos_padrao(event), (216, 144)
+            self.eventos_padrao(event)
 
             if event.type == KEYDOWN:
-                if event.key in (K_KP_ENTER, K_RETURN):
-                    self.restart.funcionar()
                 if event.key == K_ESCAPE:
-                    self.menu.funcionar()
+                    self.jogo.mudar_ecra("menu")
 
             for botao in self.botoes:
                 botao.eventos(event)
-    
-    def desenhar(self):
-        self.tela.fill(self.jogo.fundo)
-        self.mostrar_imagem(FUNDO_GAMEOVER, self.largura//2, self.altura//2)
+
+    def desenhar(self) -> None:
+        PGutilitarios.mostrar_imagem(self.tela, FUNDO_GAMEOVER, self.largura//2, self.altura//2,
+                                     escala=self.jogo.escala)
         self.todas_sprites.draw(self.tela)
 
-jogo = Zombies()
+class Options(ecras.Ecra):
+    def eventos(self):
+        for event in self.jogo.eventos:
+            self.eventos_padrao(event)
+
+            if event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    self.jogo.mudar_ecra("menu")
+
+class Credits(ecras.Ecra):
+    def __init__(self, jogo):
+        super().__init__(jogo)
+
+        self.altura_credits = self.altura + 781
+
+    def eventos(self):
+        for event in self.jogo.eventos:
+            self.eventos_padrao(event)
+
+            if event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    self.jogo.mudar_ecra("menu")
+
+    def atualizar(self):
+        self.altura_credits -= 2
+        if self.altura_credits < -781:
+            self.altura_credits = self.altura + 781
+
+    def desenhar(self):
+        super().desenhar()
+        PGutilitarios.mostrar_imagem(self.tela, CREDITS, self.largura//2, self.altura_credits,
+                                     self.jogo.escala)
+        
+jogo = Main()
 jogo.loop()
 pg.quit()
 
 # ATUALIZAÇÕES:
-# - Adicionar mais monstros
-# - Adicionar sons ao jogo
-# - Colisão dos monstros
-# - Colocar nome do personagem
-# - Configurações
-# - Créditos
-# - Tela de pausa
-# - Melhorar a IA dos inimigos
-
-# BUGS:
-# bug do Mikael Jackson
+# - tanque
+# - vida dos personagens
+# - colisões
+# - fim do mapa

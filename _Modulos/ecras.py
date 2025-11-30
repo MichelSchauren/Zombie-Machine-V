@@ -55,7 +55,6 @@ class Jogo:
 
             pg.display.flip()
             self.relogio.tick(self.fps)
-
 # Ecrã é uma tela/superfície que conterá os elementos do jogo.
 class Ecra:
     def __init__(self, jogo, *flags) -> None:

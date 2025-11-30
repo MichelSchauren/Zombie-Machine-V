@@ -1,4 +1,5 @@
 import pygame as pg
+from pygame.locals import *
 import os
 
 # Funções utilitárias para Pygame
@@ -29,38 +30,47 @@ def mostrar_texto(surface, mensagem=str, x=None, y=None,
             surface.blit(texto, texto_rect)
 
 # Objetos úteis para interfaces gráficas
-class Caixa_Texto():
-    def __init__(self, x: int, y: int, largura_min: int, fonte: str, tam: int, texto="", cor_texto=(0, 0, 0), cor_fundo=None, contorno=1, border_radius=5, padding=5, max_len=20):
-        self.x = x
-        self.y = y
-        self.largura_min = largura_min
-        self.texto = texto
-        self.fonte = pg.font.SysFont(fonte, tam)
+class Caixa_Texto(pg.sprite.Sprite):
+    def __init__(self, rect, tam_text: int, fonte: str="consolas", placeholder: str="", texto: str="", cor_texto: tuple=(0, 0, 0),
+                 cor_fundo: tuple=(255, 255, 255), border: int=0, border_color: tuple=(0, 0, 0), border_radius: int=5,
+                 padding: int=5, max_len: int=20, bold: bool=False, italic: bool=False, groups=[]) -> None:
+        super().__init__(groups)
+        pg.font.init()
+        
+        self.rect = rect
+        self.surface = pg.Surface((rect.width, rect.height), pg.SRCALPHA)
+        pg.draw.rect(self.surface, cor_fundo, self.surface.get_rect(), 0, border_radius)
+        if border > 0: pg.draw.rect(self.surface, border_color, self.surface.get_rect(), border, border_radius)
+
+        self.fonte = pg.font.SysFont(fonte, tam_text, bold, italic)
         self.cor_texto = cor_texto
-        self.cor_fundo = cor_fundo
-        self.contorno = contorno
-        self.border_radius = border_radius
+        self.placeholder = placeholder
         self.padding = padding
         self.max_len = max_len
-        self.cursor_pos = len(self.texto)
+
+        self.texto = texto
+        self.cursor_pos = len(texto)
         self.selecionado = False
-        self.criar_superficie()
 
-    def criar_superficie(self, surface=None):
-        if type(surface) == Superficie:
-            fonte_escalada = pg.font.SysFont('consolas', surface.tranform_tam(self.fonte.get_height()))
-            self.superficie = fonte_escalada.render(self.texto, True, self.cor_texto, self.cor_fundo)
-        else:
-            self.superficie = self.fonte.render(self.texto, True, self.cor_texto, self.cor_fundo)
-        self.rect_texto = self.superficie.get_rect(topleft=(self.x, self.y))
-        self.rect = pg.Rect(self.rect_texto.x - self.padding, self.rect_texto.y - self.padding, max(self.largura_min, self.rect_texto.width + self.padding*2), self.rect_texto.height + self.padding*2)
+        self.image = self.surface.copy()
+        self.rect.topleft = (rect.x, rect.y)
 
-        # Calcula a posição X do cursor
-        texto_ate_cursor = self.texto[:self.cursor_pos]
-        superficie_cursor = self.fonte.render(texto_ate_cursor, True, self.cor_texto, self.cor_fundo)
-        cursor_x = self.x + superficie_cursor.get_width()
-        self.cursor_rect = pg.Rect(cursor_x, self.y, 2, self.rect_texto.height)
-        
+    def atualizar_image(self):
+        self.image = self.surface.copy()
+        # texto
+        display_texto = self.texto if self.texto or self.selecionado else self.placeholder
+        texto_surface = self.fonte.render(display_texto, True, self.cor_texto)
+        texto_rect = texto_surface.get_rect()
+        texto_rect.topleft = (self.padding, (self.rect.height - texto_rect.height)//2)
+        self.image.blit(texto_surface, texto_rect)
+        # cursor
+        if self.selecionado:
+            texto_ate_cursor = self.texto[:self.cursor_pos]
+            superficie_cursor = self.fonte.render(texto_ate_cursor, True, self.cor_texto)
+            cursor_x = self.padding + superficie_cursor.get_width()
+            cursor_rect = pg.Rect(cursor_x, (self.rect.height - texto_rect.height)//2, 2, texto_rect.height)
+            pg.draw.rect(self.image, self.cor_texto, cursor_rect)
+
     def eventos(self, event):
         if event.type == pg.MOUSEBUTTONDOWN:
             if self.rect.collidepoint(event.pos):
@@ -75,6 +85,9 @@ class Caixa_Texto():
                 if self.cursor_pos > 0:
                     self.texto = self.texto[:self.cursor_pos-1] + self.texto[self.cursor_pos:]
                     self.cursor_pos -= 1
+            elif event.key == pg.K_DELETE:
+                if self.cursor_pos < len(self.texto):
+                    self.texto = self.texto[:self.cursor_pos] + self.texto[self.cursor_pos+1:]
             elif event.key == pg.K_LEFT:
                 self.cursor_pos = max(0, self.cursor_pos -1)
             elif event.key == pg.K_RIGHT:
@@ -82,17 +95,7 @@ class Caixa_Texto():
             elif len(self.texto) < self.max_len:
                 self.texto = self.texto[:self.cursor_pos] + event.unicode + self.texto[self.cursor_pos:]
                 self.cursor_pos += 1
-            self.criar_superficie()
-
-    def desenhar(self, surface):
-        surface.blit(self.superficie, self.rect_texto)
-        if type(surface) == Superficie:
-            self.criar_superficie(surface)
-            if self.contorno > 0: surface.draw_rect((0, 0, 0), self.rect, self.contorno if not self.selecionado else 1, self.border_radius)
-            if self.selecionado: surface.draw_rect(self.cor_texto, self.cursor_rect)
-        else:
-            if self.contorno > 0: pg.draw.rect(surface, (0, 0, 0), self.rect, self.contorno if not self.selecionado else 1, self.border_radius)
-            if self.selecionado: pg.draw.rect(surface, self.cor_texto, self.cursor_rect)
+        self.atualizar_image()
 
 class Barra:
     def __init__(self, pos: tuple, largura: int, altura: int, niveis: list, nivel_atual: int, cor=(255, 255, 255), mostrar_niveis=True):
@@ -254,35 +257,6 @@ class Superficie(pg.Surface):
     def tranform_tam(self, tam) -> None:
         return int(tam * self.zoom)
 
-if __name__ == "__main__":
-    pg.init()
-    largura, altura = 400, 300
-    tela = pg.display.set_mode((largura, altura))
-    superficie = Superficie(10, 10, 320, 180, (230, 255, 230), 1)
-    caixa = Caixa_Texto(50, 50, 60, 'arial', 20, 'Texto...')
-    barra = Barra((50, 150), 200, 41, ('Super Fácil', 'Fácil', 'Médio', 'Difícil', 'Super Díficil'), 1, cor=(0, 0, 0))
-
-    rodando = True
-    while rodando:
-        pg.time.Clock().tick(30)
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                rodando = False
-            caixa.eventos(event)
-            superficie.eventos(event)
-            
-        barra.atualizar()
-        superficie.atualizar()
-
-        tela.fill((200, 200, 200))
-        superficie.fill(superficie.cor)
-
-        caixa.desenhar(superficie)
-        barra.desenhar(superficie)
-        
-        superficie.desenhar(tela)
-        pg.display.flip()
-
 class Botao(pg.sprite.Sprite):
     def __init__(self, func: lambda: None, pos: tuple, arq_img: str=None,
                  tam: tuple=(40, 40), cor: tuple=(0, 0, 0),
@@ -321,3 +295,69 @@ class Botao(pg.sprite.Sprite):
                     self.image = self.imagens[1]
                 else:
                     self.image = self.imagens[0]
+
+if __name__ == "__main__":
+    import ecras
+
+    class Exemplo(ecras.Jogo):
+        def __init__(self):
+            super().__init__("Exemplo", 800, 600, 1, 10, "gabriela")
+
+            self.ecras = {
+                "menu": Menu(self)
+            }
+            self.ecra_atual = self.ecras["menu"]
+
+    class Menu(ecras.Ecra):
+        def __init__(self, jogo, *flags) -> None:
+            super().__init__(jogo, *flags)
+
+        def criar_sprites(self) -> None:
+            super().criar_sprites()
+
+            self.caixa_texto = Caixa_Texto(pg.Rect(300, 300, 200, 50), 20, "consolas", "Nome:", border=3, groups=[self.todas_sprites])
+
+        def eventos(self) -> None:
+            for event in self.jogo.eventos:
+                self.eventos_padrao(event)
+
+                self.caixa_texto.eventos(event)
+
+        def desenhar(self) -> None:
+            self.tela.fill((200, 200, 200))
+            self.todas_sprites.draw(self.tela)
+
+    exemplo = Exemplo()
+    exemplo.loop()
+    pg.quit()
+
+'''
+if __name__ == "__main__":
+    pg.init()
+    largura, altura = 400, 300
+    tela = pg.display.set_mode((largura, altura))
+    superficie = Superficie(10, 10, 320, 180, (230, 255, 230), 1)
+    caixa = Caixa_Texto(50, 50, 60, 'arial', 20, 'Texto...')
+    barra = Barra((50, 150), 200, 41, ('Super Fácil', 'Fácil', 'Médio', 'Difícil', 'Super Díficil'), 1, cor=(0, 0, 0))
+
+    rodando = True
+    while rodando:
+        pg.time.Clock().tick(30)
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                rodando = False
+            caixa.eventos(event)
+            superficie.eventos(event)
+            
+        barra.atualizar()
+        superficie.atualizar()
+
+        tela.fill((200, 200, 200))
+        superficie.fill(superficie.cor)
+
+        caixa.desenhar(superficie)
+        barra.desenhar(superficie)
+        
+        superficie.desenhar(tela)
+        pg.display.flip()
+'''

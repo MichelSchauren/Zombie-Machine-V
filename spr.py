@@ -4,74 +4,83 @@ from pygame.locals import *
 from constantes import *
 
 class Mapa(pg.sprite.Sprite):
-    def __init__(self, ecra, arq: str, *groups) -> None:
-        super().__init__(ecra.todas_sprites, groups)
-        self.ecra = ecra
-        self.image = pg.image.load(arq).convert_alpha()
-        self.rect = self.image.get_rect()
-        self.desl = pg.Vector2(0, 0)
-        self.rect.center = ecra.mapa_centro
+    def __init__(self, mapa_rect, arquivo: str, *groups):
+        super().__init__(groups)
+        self.mapa_rect = mapa_rect
 
-    def update(self) -> None:
-        self.rect.center = self.ecra.mapa_centro
+        self.image = pg.image.load(arquivo).convert_alpha()
+
+        self.rect = self.image.get_rect()
+        self.rect.topleft = mapa_rect.topleft
+
+    def update(self):
+        self.rect.topleft = self.mapa_rect.topleft
 
 class Personagem(pg.sprite.Sprite):
-    def __init__(self, ecra, desl: tuple, vida: int, arq_spritesheet: str,
-                 tam_img: tuple, quant_imgs: int, estados: dict, groups: list=[]) -> None:
-        super().__init__(ecra.todas_sprites, ecra.personagens, *groups)
-
+    def __init__(self, ecra, spritesheet: str, div_spr: tuple, org_spr: dict,
+                  desl: tuple, vida: int, *groups) -> None:
+        super().__init__(groups, ecra.personagens, ecra.todas_sprites)
         self.ecra = ecra
-        self.spritesheet = pg.image.load(arq_spritesheet).convert_alpha()
 
-        self.imagens = self.get_imagens(self.spritesheet, tam_img, quant_imgs)
-        self.imagens = self.organizar_imagens(estados)
+        self.spritesheet = pg.image.load(spritesheet).convert_alpha()
+        self.imagens = {'direita': {}, 'esquerda': {}}
 
-        self.image = self.imagens["parado"][0][1]
+        sprites = self.dividir_spritesheet(self.spritesheet, div_spr)
+        self.organizar_sprites(sprites, org_spr)
+
+        self.image = self.imagens['direita']['parado'][0]
+
         self.rect = self.image.get_rect()
-        self.desl = pg.Vector2(desl)
-        self.rect.center = ecra.mapa_centro + self.desl
+        self.rect_map = self.image.get_rect()
+        self.rect_colid = pg.Rect(0, 0, self.rect.width//2, self.rect.height//4)
 
-        self.vivo = True
+        self.rect_map.center = desl
+        self.rect_colid.midbottom = self.rect_map.midbottom
+        self.rect.topleft = (self.ecra.mapa_rect.x + self.rect_map.x, self.ecra.mapa_rect.y + self.rect_map.y)
+
         self.vida = vida
+        self.direcao = 'direita'
+        self.estado = 'parado'
         self.atual = 0
-        self.estado = "parado"
-        self.lado = 1  # 0: esquerda, 1: direita
+        self.atirando = False
+        self.morto = False
 
-    def get_imagens(self, spritesheet: pg.Surface, tam_img: tuple, quant_imgs: int) -> list:
-        colunas = int(quant_imgs**0.5)
-        linhas = colunas + (1 if quant_imgs % colunas != 0 else 0)
-        imagens = []
-
+    def dividir_spritesheet(self, spritesheet, div_spr: tuple) -> None:
+        w, h, n_imgs = div_spr
+        r = int(n_imgs**0.5)
+        linhas, colunas = r + (1 if r**2 != n_imgs else 0), r
+        sprites = []
         for linha in range(linhas):
             for coluna in range(colunas):
-                if len(imagens) < quant_imgs:
-                    x = coluna * tam_img[0]
-                    y = linha * tam_img[1]
-                    imagem = spritesheet.subsurface((x, y), tam_img)
-                    imagens.append(imagem)
+                if len(sprites) < n_imgs:
+                    spr = spritesheet.subsurface(coluna*w, linha*h, w, h)
+                    sprites.append(spr)
                 else:
                     break
-        return imagens
-    
-    def organizar_imagens(self, estados: dict) -> dict:
-        imagens_organizadas = {}
-        indice = 0
 
-        for estado, quantidade in estados.items():
-            imagens_organizadas[estado] = []
-            for _ in range(quantidade):
-                imgs_estado = [pg.transform.flip(self.imagens[indice], True, False), self.imagens[indice]]
-                imagens_organizadas[estado].append(imgs_estado)
-                indice += 1
-        return imagens_organizadas
+        return sprites
     
+    def organizar_sprites(self, sprites: list, estados: dict) -> None:
+        for direcao in self.imagens:
+            self.imagens[direcao] = {}
+            for estado, pos in estados.items():
+                self.imagens[direcao][estado] = []
+                for n_spr in range(pos[0], pos[1]):
+                    sprite = sprites[n_spr]
+                    if direcao == 'esquerda':
+                        sprite = pg.transform.flip(sprite, True, False)
+                    self.imagens[direcao][estado].append(sprite)
+
+    def update(self):
+        super().update()
+        # Morrer
+        if self.vida <= 0 and self.estado != 'morrendo':
+            self.estado, self.atual = 'morrendo', 0
+
     def atualizar_pos(self) -> None:
-        self.rect.center = self.ecra.mapa_centro + self.desl
-        
-    def morrer(self):
-        if self.vida <= 0:
-            self.estado = 'morrendo'
-        
+        self.rect_colid.midbottom = self.rect_map.midbottom
+        self.rect.topleft = (self.ecra.mapa_rect.x + self.rect_map.x, self.ecra.mapa_rect.y + self.rect_map.y)
+
     def movimentar(self) -> None:
         pass
 
@@ -82,143 +91,133 @@ class Personagem(pg.sprite.Sprite):
         pass
 
 class Player(Personagem):
-    def __init__(self, ecra, pos: tuple) -> None:
-        estados = {
-            "correndo": 11,
-            "atirando_correndo": 8,
-            "morrendo": 5,
-            "atirando_parado": 1,
-            "parado": 1
-        }
-        super().__init__(ecra, pos, PLAYER_VIDA, PLAYER_SPRITESHEET,
-                         (80, 80), 26, estados)
+    def __init__(self, ecra, desl: tuple) -> None:
         
-        self.atirando = False
-        self.contador_tpf = 0
+        spritesheet = PLAYER_SPRITESHEET
+        div_spr = (80, 80, 26)
+        org_spr = {'correndo': (0, 11), 'caminhando': (11, 19), 'morrendo': (19,24),
+                              'atacando': (24, 25), 'parado': (25, 26)}
+        vida = PLAYER_VIDA
         
-    def update(self):
-        if self.vivo:
-            pressionados = pg.key.get_pressed()
+        super().__init__(ecra, spritesheet, div_spr, org_spr, desl, vida)
+        
+    def update(self) -> None:
+        self.atualizar_pos()
+        if not self.morto:
+            super().update()
             pos_mouse = pg.mouse.get_pos()
-            press_mouse = pg.mouse.get_pressed()
+            precionados = pg.key.get_pressed()
+            pres_mouse = pg.mouse.get_pressed()
 
-            # MOVER PERSONAGEM
-            direcao = pg.Vector2(0, 0)
-            for tecla, vetor in DIRECOES.values():
-                if any(pressionados[k] for k in tecla):
-                    direcao += pg.Vector2(vetor)
+            self.atirando = True if pres_mouse[0] else False
 
-            if direcao.length() != 0:
-                direcao = direcao.normalize()
-
-            # verificar colisão
-            '''
-            vel = PLAYER_VEL_ATIRANDO if self.atirando else PLAYER_VEL
-            rect_colisor = pg.Rect(0, 0, self.rect.width//2, self.rect.height//4)
-            rect_colisor.bottomleft = (self.rect.left +20, self.rect.bottom -20)
-            rect_colisor.x += direcao.x * vel
-            rect_colisor.y += direcao.y * vel
-            if not any([True for colisor in self.ecra.colisores
-                        if colisor.colliderect(rect_colisor)]):
-                self.desl += direcao * vel
-                self.ecra.mapa_centro = pg.Vector2(self.ecra.largura//2, self.ecra.altura//2) -self.desl
-                for i, colisor in enumerate(self.ecra.colisores):
-                    colisor.center = (self.ecra.mapa_centro - pg.Vector2(937, 937)) + pg.Vector2(self.ecra.COLISORES[1].topleft)'''
-
-            # ATIRAR
-            '''
-            if press_mouse[0]:
-                self.atirando = True
-                if self.contador_tpf >= 1:
-                    pos = (self.rect.left +10, self.rect.centery +9) if self.lado == 0 else (self.rect.right -10, self.rect.centery +9)
-                    Tiro(self.ecra, pos, pos_mouse)
-                    self.contador_tpf -= 1
-                else:
-                    self.contador_tpf += TPF
-            else:
-                self.atirando = False
-                self.contador_tpf = 0'''
-
-            # ATUALIZAR IMAGEM
-            self.morrer()
-            # estado
-            self.estado_atual = self.estado
-            if self.estado == "morrendo":
+            # Controle de estados
+            if self.estado == 'morrendo':
                 pass
-            if self.atirando:
-                if direcao.length() != 0:
-                    self.estado = "atirando_correndo"
+            elif (precionados[K_a] or precionados[K_LEFT]) and (precionados[K_d] or precionados[K_RIGHT]):
+                self.estado, self.atual = 'atacando' if self.atirando else 'parado', 0
+            elif any([precionados[tecla] for tecla in (K_w, K_a, K_s, K_d, K_UP, K_LEFT, K_DOWN, K_RIGHT)]):
+                # Controle do estado de atirar
+                if self.atirando:
+                    if self.estado != 'caminhando':
+                        self.estado, self.atual = 'caminhando', 0
+                # Controle do entado de correr
                 else:
-                    self.estado = "atirando_parado"
+                    if self.estado != 'correndo':
+                        self.estado, self.atual = 'correndo', 0
             else:
-                if direcao.length() != 0:
-                    self.estado = "correndo"
-                else:
-                    self.estado = "parado"
-                    
-            # lado
+                self.estado, self.atual = 'atacando' if self.atirando else 'parado', 0
+
+            # Controle de direção
             if self.atirando:
-                self.lado = 0 if pos_mouse[0] < self.rect.centerx else 1
+                if pos_mouse[0] < self.rect.centerx:
+                    self.direcao = 'esquerda'
+                else:
+                    self.direcao = 'direita'
+            elif self.estado == 'parado':
+                pass
+            elif precionados[K_a] or precionados[K_LEFT]:
+                self.direcao = 'esquerda'
+            elif precionados[K_d] or precionados[K_RIGHT]:
+                self.direcao = 'direita'
+
+            self.image = self.imagens[self.direcao][self.estado][int(self.atual)]
+
+            if self.estado == 'morrendo':
+                self.atual += 0.2
+            elif self.atirando:
+                self.atual += PLAYER_VEL_ATIRANDO/8
             else:
-                self.lado = 0 if direcao.x < 0 else 1 if direcao.x > 0 else self.lado
-                
-            # imagem
-            self.atual += 0.5
-            if self.atual >= len(self.imagens[self.estado]) or self.estado != self.estado_atual:
+                self.atual += PLAYER_VEL/8
+            if int(self.atual) > len(self.imagens[self.direcao][self.estado])-1:
                 self.atual = 0
-                
+
                 # Morrer
                 if self.estado == 'morrendo':
                     self.morto = True
+                    
+        else:
+            self.atual += 1
+            if self.atual >= 30:
+                self.ecra.jogo.mudar_ecra("gameover")
 
-            self.image = self.imagens[self.estado][int(self.atual)][self.lado]
+class Rapido(Personagem):
+    def __init__(self, ecra, desl: tuple) -> None:
+        super().__init__()
 
 class Tanque(Personagem):
-    def __init__(self, ecra, pos: tuple) -> None:
-        estados = {
-            "parado": 1,
-            "andando": 5,
-            "atacando": 8,
-            "morrendo": 4
-        }
-        super().__init__(ecra, pos, TANQUE_VIDA, TANQUE_SPRITESHEET,
-                         (80, 80), 18, estados, [ecra.inimigos])
+    def __init__(self, ecra, desl: tuple) -> None:
         
+        spritesheet = TANQUE_SPRITESHEET
+        div_spr = (80, 80, 18)
+        org_spr = {'parado': (0, 1), 'caminhando': (1, 6), 'atacando': (6, 14), 'morrendo': (14, 18)}
+        vida = TANQUE_VIDA
         self.dano = TANQUE_DANO
 
+        super().__init__(ecra, spritesheet, div_spr, org_spr, desl, vida, ecra.inimigos)   
+
     def update(self):
-        if self.vivo:
+        self.atualizar_pos()
+
+        if not self.morto:
+            super().update()
+
             player = self.ecra.player
             dist_player = pg.Vector2(self.rect.center).distance_to(pg.Vector2(player.rect.center))
-            
-            # MOVER PERSONAGEM
-            direcao = pg.Vector2(player.rect.center) - pg.Vector2(self.rect.center)
 
-            if direcao.length() != 0:
-                direcao = direcao.normalize()
-                
-            self.desl += direcao * TANQUE_VEL
-            self.atualizar_pos()
-
-            # ATUALIZAR IMAGEM
-            self.morrer()
-            # estado
-            estado_atual = self.estado
-            if self.estado == "morrendo":
+            # Definir estado e mover
+            # Não mover quando estiver morto
+            if self.estado == 'morrendo':
                 pass
+            # Mover quando estiver a mais de 40 pixels de distancia do player
             elif dist_player > TANQUE_ALCANCE:
-                self.estado = "andando"
-            else:
-                self.estado = "atacando"
-                    
-            # lado
-            self.lado = 1 if self.rect.centerx < player.rect.centerx else 0
-
-            # imagem
-            self.atual += 0.3
-            if self.atual >= len(self.imagens[self.estado]) or self.estado != estado_atual:
-                self.atual = 0
+                direcao = pg.Vector2(player.rect.center) - pg.Vector2(self.rect.center)
+                if direcao.length() != 0: direcao = direcao.normalize()
+                velx, vely = direcao.x * TANQUE_VEL, direcao.y * TANQUE_VEL
                 
+                # Verificar colisão antes de mover
+                colisor = self.rect_colid.move(velx, vely)
+                possiveis = self.ecra.grid.query(colisor)
+                if not any(colisor.colliderect(r) for r in possiveis): # Não colidiu
+                    self.rect_map.move_ip(velx, vely)
+                    if self.estado != 'caminhando':
+                        self.estado, self.atual = 'caminhando', 0
+                elif self.estado != 'parado': # colidiu
+                    self.estado, self.atual = 'parado', 0
+
+            # atacar quando estiver próximo ao player
+            elif self.estado != 'atacando':
+                self.estado, self.atual = 'atacando', 0
+
+            # Definir direção
+            dir = 'esquerda' if self.rect.centerx > player.rect.centerx else 'direita'
+
+            # Atualizar imagem
+            self.image = self.imagens[dir][self.estado][int(self.atual)]
+            self.atual += TANQUE_VEL/8
+            if int(self.atual) > len(self.imagens[dir][self.estado])-1:
+                self.atual = 0
+
                 # Dar dano ao atacar
                 if self.estado == 'atacando':
                     player.vida -= self.dano
@@ -226,40 +225,48 @@ class Tanque(Personagem):
                 # Morrer
                 if self.estado == 'morrendo':
                     self.morto = True
-
-            self.image = self.imagens[self.estado][int(self.atual)][self.lado]
+        else:
+            self.atual += 1
+            if self.atual >= 50:
+                self.kill()
 
 class Tiro(pg.sprite.Sprite):
-    def __init__(self, ecra, pos: tuple, destino: tuple) -> None:
-        super().__init__(ecra.todas_sprites, ecra.tiros)
-
+    def __init__(self, ecra, desl: tuple, destino: tuple, *groups) -> None:
+        super().__init__(groups)
         self.ecra = ecra
+
         self.image = pg.Surface((5, 5))
         self.image.fill(AMARELO)
         self.rect = self.image.get_rect()
-        self.rect.center = pg.Vector2(pos)
-        
-        self.destino = pg.Vector2(destino)
-        self.velocidade = pg.Vector2(self.calcular_vel())
+        self.rect.center = (self.ecra.mapa_rect.x + desl[1], self.ecra.mapa_rect.y + desl[1])
 
-    def calcular_vel(self) -> tuple:
-        direcao = self.destino - pg.Vector2(self.rect.center)
-        if direcao.length() != 0:
-            direcao = direcao.normalize()
-        vel_x = direcao.x * TIRO_VEL
-        vel_y = direcao.y * TIRO_VEL
-        return (vel_x, vel_y)
+        self.origem = self.rect.center
+        self.destino = destino
+
+        self.mov = pg.Vector2(pg.Vector2(destino) - pg.Vector2(desl))
+        self.mov = self.mov.normalize() * TIRO_VEL
+
+        self.rect_map = self.rect.copy()
+        self.rect_map.center = desl
     
-    def update(self) -> None:
-        # Movimentar o tiro
-        self.rect.x += self.velocidade.x
-        self.rect.y += self.velocidade.y
+    def update(self):
+        self.rect_map.move_ip(self.mov.x, self.mov.y)
+        
+        # Some quando colide ou sai do mapa
+        possiveis = self.ecra.grid.query(self.rect_map)
+        if not 0 <= self.rect_map.centerx <= MAPA_LARGURA or not 0 <= self.rect_map.centery <= MAPA_ALTURA  or \
+            any(self.rect_map.colliderect(r) for r in possiveis):
+            self.kill()
 
-        # Verificar colisão
-        if not self.ecra.mapa.rect.colliderect(self.rect):
-            self.kill()
-        for inimigo in pg.sprite.spritecollide(self, self.ecra.inimigos, False):
-            inimigo.vida -= TIRO_DANO
-            if inimigo.vida <= 0:
-                inimigo.vivo = False
-            self.kill()
+        # Dar dano
+        for inimigo in self.ecra.inimigos:
+            if not inimigo.morto and self.rect_map.colliderect(inimigo.rect_map) and pg.sprite.collide_mask(self, inimigo):
+                inimigo.vida -= TIRO_DANO
+                self.kill()
+                break
+        self.atualizar_pos()
+
+    def atualizar_pos(self) -> None:
+        self.rect.topleft = (self.ecra.mapa_rect.x + self.rect_map.x, self.ecra.mapa_rect.y + self.rect_map.y)
+
+        
